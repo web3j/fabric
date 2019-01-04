@@ -1,0 +1,40 @@
+plugins {
+    id 'org.jetbrains.kotlin.jvm' version '1.3.10'
+    id 'java'
+}
+
+group 'org.web3j'
+version '1.0-SNAPSHOT'
+
+ext {
+    fabricVersion = '1.3.+'
+    logbackVersion = '1.2.+'
+    kotlinLoggingVersion = '1.6.+'
+    
+    junitVersion = '4.+'
+    assertJVersion = '3.+'
+    mockitoVersion = '2.+'
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8",
+            "io.github.microutils:kotlin-logging:$kotlinLoggingVersion",
+            "org.hyperledger.fabric-sdk-java:fabric-sdk-java:$fabricVersion",
+            "org.hyperledger.fabric-chaincode-java:fabric-chaincode-shim:$fabricVersion",
+            "ch.qos.logback:logback-classic:$logbackVersion"
+    testCompile "junit:junit:$junitVersion",
+            "org.assertj:assertj-core:$assertJVersion",
+            "org.mockito:mockito-core:$mockitoVersion"
+}
+
+compileKotlin {
+    kotlinOptions.jvmTarget = '1.8'
+}
+
+compileTestKotlin {
+    kotlinOptions.jvmTarget = '1.8'
+}
