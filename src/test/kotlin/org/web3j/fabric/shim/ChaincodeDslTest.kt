@@ -34,14 +34,14 @@ class ChaincodeDslTest {
 
         invoke {
             function("negate") {
-                success("OK", typedArg<Boolean>(0).not())
+                success("OK", getArg<Boolean>(0).not())
 
             }
 
             function("sum") {
                 var sum = 0
                 for (i in stringArgs.indices) {
-                    sum += typedArg<Int>(i)
+                    sum += getArg<Int>(i)
                 }
                 success("OK", sum)
             }

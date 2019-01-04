@@ -2,12 +2,11 @@ package org.web3j.fabric.shim
 
 import mu.KLogging
 import org.hyperledger.fabric.shim.Chaincode
-import org.hyperledger.fabric.shim.Chaincode.Response
 import org.hyperledger.fabric.shim.ChaincodeBase
 import org.hyperledger.fabric.shim.ChaincodeStub
+import org.web3j.fabric.shim.ChaincodeDsl.ChaincodeFunction
 import org.web3j.fabric.shim.ChaincodeDsl.ChaincodeHandlerType
-import org.web3j.fabric.shim.ChaincodeDsl.ChaincodeHandlerType.INIT
-import org.web3j.fabric.shim.ChaincodeDsl.ChaincodeHandlerType.INVOKE
+import org.web3j.fabric.shim.ChaincodeDsl.ChaincodeHandlerType.*
 import java.math.BigDecimal
 import java.math.BigInteger
 
@@ -30,15 +29,13 @@ import java.math.BigInteger
 @ChaincodeMarker
 class ChaincodeDsl : ChaincodeBase() {
 
-    private val handlers: ChaincodeHandlers = mapOf(
+    private val handlers: ChaincodeHandlers = mutableMapOf(
             INIT to mutableMapOf(), INVOKE to mutableMapOf()
     )
 
-    override fun init(stub: ChaincodeStub) = handlers[INIT]!![stub.function]?.invoke(stub)
-            ?: error("No init function '${stub.function}' defined")
+    override fun init(stub: ChaincodeStub) = invokeInternal(stub, INIT)
 
-    override fun invoke(stub: ChaincodeStub) = handlers[INVOKE]!![stub.function]?.invoke(stub)
-            ?: error("No invoke function '${stub.function}' defined")
+    override fun invoke(stub: ChaincodeStub) = invokeInternal(stub, INVOKE)
 
     /**
      * Starts an `init` handler block allowing nested `function` blocks.
@@ -60,6 +57,18 @@ class ChaincodeDsl : ChaincodeBase() {
     inline fun invoke(invoke: ChaincodeHandler.() -> Unit) {
         val handler = ChaincodeHandler(INVOKE)
         invoke.invoke(handler)
+    }
+
+    private fun invokeInternal(stub: ChaincodeStub, handlerType: ChaincodeHandlerType): Chaincode.Response {
+
+        val function: ChaincodeFunction = handlers[handlerType]!![stub.function]
+                ?: return error("No ${handlerType.name.toLowerCase()} function '${stub.function}' defined")
+
+        if (stub.args.size != function.numArgs) {
+            error("Incorrect number of arguments. Expecting ${function.numArgs}")
+        }
+
+        return function.function.invoke(stub)
     }
 
     companion object : KLogging() {
@@ -92,21 +101,21 @@ class ChaincodeDsl : ChaincodeBase() {
         /**
          * Returns a Chaincode success response with the given message and result.
          */
-        fun success(message: String? = null, result: Any? = null): Response {
+        fun success(message: String? = null, result: Any? = null): Chaincode.Response {
             return newSuccessResponse(message, result?.toString()?.toByteArray())
         }
 
         /**
          * Returns a Chaincode error response with the given message and result.
          */
-        fun error(message: String? = null, result: Any? = null): Response {
+        fun error(message: String? = null, result: Any? = null): Chaincode.Response {
             return newErrorResponse(message, result?.toString()?.toByteArray())
         }
 
         /**
          * Returns a Chaincode error response with the given throwable.
          */
-        fun error(throwable: Throwable): Response {
+        fun error(throwable: Throwable): Chaincode.Response {
             return newErrorResponse(throwable)
         }
     }
@@ -120,17 +129,24 @@ class ChaincodeDsl : ChaincodeBase() {
          * @receiver [ChaincodeHandler]
          * @receiving [ChaincodeStub]
          */
-        fun function(name: String, function: ChaincodeStub.() -> Response) {
+        fun function(name: String, numArgs: Int = 0, function: ChaincodeStub.() -> Chaincode.Response) {
             requireNotNull(name) { "Function name cannot be null" }
             require(name.isNotBlank()) { "Function name cannot be blank" }
+            require(0 <= numArgs) { "Function arguments have to be zero or more" }
             require(!this@ChaincodeDsl.handlers[type]!!.containsKey(name)) {
                 "Function '$name' already defined"
             }
 
-            this@ChaincodeDsl.handlers[type]!![name] = function
+            this@ChaincodeDsl.handlers[type]!![name] = ChaincodeFunction(name, numArgs, function)
         }
 
     }
+
+    data class ChaincodeFunction(
+            internal val name: String,
+            internal val numArgs: Int,
+            internal val function: ChaincodeStub.() -> Chaincode.Response
+    )
 
     enum class ChaincodeHandlerType {
         INIT, INVOKE
@@ -140,11 +156,11 @@ class ChaincodeDsl : ChaincodeBase() {
 
 /**
  * Extension method providing argument type conversion,
- * e.g. `val arg0 = stub.typedArg<Int>(0)`.
+ * e.g. `val arg0 = getArg<Int>(0)`.
  *
  * @receiver [ChaincodeStub]
  */
-inline fun <reified T> ChaincodeStub.typedArg(index: Int): T {
+inline fun <reified T> ChaincodeStub.getArg(index: Int): T {
     return when (T::class) {
         String::class -> stringArgs[index]
 
@@ -167,8 +183,36 @@ inline fun <reified T> ChaincodeStub.typedArg(index: Int): T {
     } as T
 }
 
-private typealias ChaincodeHandlers = Map<ChaincodeHandlerType, ChaincodeFunctions>
-private typealias ChaincodeFunctions = MutableMap<String, (ChaincodeStub) -> Response>
+@Suppress("EXTENSION_SHADOWED_BY_MEMBER")
+inline fun <reified T> ChaincodeStub.getState(key: String): T? {
+    return when (T::class) {
+        String::class -> getStringState(key)
+
+        Byte::class -> getStringState(key).toByte()
+        ByteArray::class -> getState(key)
+
+        Int::class -> getStringState(key).toInt()
+        Long::class -> getStringState(key).toLong()
+        BigInteger::class -> getStringState(key).toBigInteger()
+
+        Float::class -> getStringState(key).toFloat()
+        Double::class -> getStringState(key).toDouble()
+        BigDecimal::class -> getStringState(key).toBigDecimal()
+
+        Boolean::class -> getStringState(key)?.toBoolean()
+        else -> {
+            ChaincodeDsl.logger.warn { "No conversion for ${T::class}" }
+            throw IllegalArgumentException("No conversion for ${T::class}")
+        }
+    } as T?
+}
+
+fun ChaincodeStub.putState(key: String, value: Any) {
+    putStringState(key, value.toString())
+}
+
+private typealias ChaincodeHandlers = MutableMap<ChaincodeHandlerType, ChaincodeFunctions>
+private typealias ChaincodeFunctions = MutableMap<String, ChaincodeFunction>
 
 @DslMarker
 private annotation class ChaincodeMarker
