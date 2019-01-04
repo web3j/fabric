@@ -43,6 +43,7 @@ class ChaincodeDsl : ChaincodeBase() {
     /**
      * Starts an `init` handler block allowing nested `function` blocks.
      *
+     * @receiver [ChaincodeHandler]
      * @see [Chaincode.init]
      */
     inline fun init(init: ChaincodeHandler.() -> Unit) {
@@ -53,6 +54,7 @@ class ChaincodeDsl : ChaincodeBase() {
     /**
      * Starts an `invoke` handler block allowing nested `function` blocks.
      *
+     * @receiver [ChaincodeHandler]
      * @see [Chaincode.invoke]
      */
     inline fun invoke(invoke: ChaincodeHandler.() -> Unit) {
@@ -64,7 +66,6 @@ class ChaincodeDsl : ChaincodeBase() {
 
         /**
          * Starts a `chaincode` block allowing nested `init` and `invoke` calls.
-         *
          * ```
          * chaincode {
          *      init {
@@ -79,6 +80,8 @@ class ChaincodeDsl : ChaincodeBase() {
          *      }
          * }
          * ```
+         *
+         * @receiver [ChaincodeDsl]
          */
         inline fun chaincode(chaincode: ChaincodeDsl.() -> Unit): ChaincodeBase {
             val dsl = ChaincodeDsl()
@@ -112,8 +115,10 @@ class ChaincodeDsl : ChaincodeBase() {
     inner class ChaincodeHandler(private val type: ChaincodeHandlerType) {
 
         /**
-         * Starts a function declaration inside of a handler block
-         * receiving a [ChaincodeStub] instance.
+         * Starts a function declaration inside of a handler block.
+         *
+         * @receiver [ChaincodeHandler]
+         * @receiving [ChaincodeStub]
          */
         fun function(name: String, function: ChaincodeStub.() -> Response) {
             requireNotNull(name) { "Function name cannot be null" }
