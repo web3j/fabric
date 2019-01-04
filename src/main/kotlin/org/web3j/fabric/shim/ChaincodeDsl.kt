@@ -30,7 +30,7 @@ import java.math.BigInteger
 @ChaincodeMarker
 class ChaincodeDsl : ChaincodeBase() {
 
-    private val handlers: ChaincodeHandlers = mutableMapOf(
+    private val handlers: ChaincodeHandlers = mapOf(
             INIT to mutableMapOf(), INVOKE to mutableMapOf()
     )
 
@@ -167,7 +167,7 @@ inline fun <reified T> ChaincodeStub.typedArg(index: Int): T {
     } as T
 }
 
-private typealias ChaincodeHandlers = MutableMap<ChaincodeHandlerType, ChaincodeFunctions>
+private typealias ChaincodeHandlers = Map<ChaincodeHandlerType, ChaincodeFunctions>
 private typealias ChaincodeFunctions = MutableMap<String, (ChaincodeStub) -> Response>
 
 @DslMarker
